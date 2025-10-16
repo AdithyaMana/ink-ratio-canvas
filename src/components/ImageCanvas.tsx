@@ -1,7 +1,8 @@
 import { useRef, useEffect, useState, useCallback } from "react";
 import { SelectionBox } from "../types";
-import { Trash2, Move, Edit3, Upload } from "lucide-react";
+import { Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { floodFill } from "../utils/floodFill";
 
 interface ImageCanvasProps {
   imageUrl: string | null;
@@ -10,6 +11,8 @@ interface ImageCanvasProps {
   selections: SelectionBox[];
   onSelectionsChange: (selections: SelectionBox[]) => void;
   onImageReady: (imageData: ImageData) => void;
+  toolMode: "select" | "eyedropper" | "magicwand";
+  onBackgroundColorSample: (color: { r: number; g: number; b: number }) => void;
 }
 
 type DragMode = "draw" | "move" | "resize" | null;
@@ -22,10 +25,16 @@ export function ImageCanvas({
   selections,
   onSelectionsChange,
   onImageReady,
+  toolMode,
+  onBackgroundColorSample,
 }: ImageCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const imageDataRef = useRef<ImageData | null>(null);
   const [scale, setScale] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
   const [dragMode, setDragMode] = useState<DragMode>(null);
   const [startPoint, setStartPoint] = useState({ x: 0, y: 0 });
   const [currentBox, setCurrentBox] = useState<SelectionBox | null>(null);
@@ -61,6 +70,7 @@ export function ImageCanvas({
       ctx.drawImage(img, 0, 0);
       
       const imageData = ctx.getImageData(0, 0, img.width, img.height);
+      imageDataRef.current = imageData;
       onImageReady(imageData);
     };
     img.src = imageUrl;
@@ -164,10 +174,56 @@ export function ImageCanvas({
   }, [scale]);
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    // Handle panning with middle mouse button or Ctrl+Click
+    if (e.button === 1 || (e.button === 0 && e.ctrlKey)) {
+      setIsPanning(true);
+      setPanStart({ x: e.clientX - offset.x, y: e.clientY - offset.y });
+      return;
+    }
+
     const { x, y } = screenToImage(e.clientX, e.clientY);
+
+    // Handle eyedropper tool
+    if (toolMode === "eyedropper" && imageDataRef.current) {
+      const imageData = imageDataRef.current;
+      const px = Math.floor(x);
+      const py = Math.floor(y);
+      
+      if (px >= 0 && px < imageData.width && py >= 0 && py < imageData.height) {
+        const idx = (py * imageData.width + px) * 4;
+        const r = imageData.data[idx];
+        const g = imageData.data[idx + 1];
+        const b = imageData.data[idx + 2];
+        onBackgroundColorSample({ r, g, b });
+      }
+      return;
+    }
+
+    // Handle magic wand tool
+    if (toolMode === "magicwand" && imageDataRef.current) {
+      const imageData = imageDataRef.current;
+      const bbox = floodFill(imageData, Math.floor(x), Math.floor(y));
+      
+      if (bbox) {
+        const newBox: SelectionBox = {
+          id: `sel-${Date.now()}`,
+          x: bbox.minX,
+          y: bbox.minY,
+          width: bbox.maxX - bbox.minX,
+          height: bbox.maxY - bbox.minY,
+          label: `Selection ${selections.length + 1}`,
+          color: "#3b82f6",
+          isData: true,
+          countFullArea: false,
+        };
+        onSelectionsChange([...selections, newBox]);
+      }
+      return;
+    }
+
     const selection = findSelectionAt(x, y);
 
-    if (selection) {
+    if (selection && toolMode === "select") {
       const handle = findResizeHandle(selection, x, y);
       
       if (handle) {
@@ -180,7 +236,7 @@ export function ImageCanvas({
       }
       
       setStartPoint({ x, y });
-    } else {
+    } else if (toolMode === "select") {
       // Start drawing new selection
       setDragMode("draw");
       setSelectedId(null);
@@ -203,6 +259,15 @@ export function ImageCanvas({
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    // Handle panning
+    if (isPanning) {
+      setOffset({
+        x: e.clientX - panStart.x,
+        y: e.clientY - panStart.y,
+      });
+      return;
+    }
+
     const { x, y } = screenToImage(e.clientX, e.clientY);
 
     if (dragMode === "draw" && currentBox) {
@@ -276,7 +341,16 @@ export function ImageCanvas({
       
       setStartPoint({ x, y });
     } else {
-      // Update cursor based on hover
+      // Update cursor based on tool mode and hover
+      if (toolMode === "eyedropper") {
+        e.currentTarget.style.cursor = "crosshair";
+        return;
+      }
+      if (toolMode === "magicwand") {
+        e.currentTarget.style.cursor = "crosshair";
+        return;
+      }
+
       const selection = findSelectionAt(x, y);
       setHoveredId(selection?.id || null);
       
@@ -304,6 +378,8 @@ export function ImageCanvas({
   };
 
   const handleMouseUp = () => {
+    setIsPanning(false);
+    
     if (dragMode === "draw" && currentBox) {
       // Normalize dimensions (handle negative width/height)
       let { x, y, width, height } = currentBox;
@@ -339,6 +415,26 @@ export function ImageCanvas({
     }
   };
 
+  const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    const newScale = Math.max(0.1, Math.min(5, scale * delta));
+    
+    // Zoom towards mouse position
+    const rect = canvasRef.current!.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    
+    const scaleChange = newScale / scale;
+    setOffset({
+      x: mouseX - (mouseX - offset.x) * scaleChange,
+      y: mouseY - (mouseY - offset.y) * scaleChange,
+    });
+    
+    setScale(newScale);
+  };
+
   if (!imageUrl) {
     return (
       <div ref={containerRef} className="flex-1 flex items-center justify-center bg-canvas rounded-lg border-2 border-dashed border-border">
@@ -372,20 +468,27 @@ export function ImageCanvas({
         )}
       </div>
 
-      <div className="flex-1 flex items-center justify-center">
-        <canvas
-          ref={canvasRef}
+      <div className="flex-1 flex items-center justify-center overflow-hidden">
+        <div
           style={{
-            width: imageWidth * scale,
-            height: imageHeight * scale,
-            boxShadow: "var(--shadow-lg)",
+            transform: `translate(${offset.x}px, ${offset.y}px)`,
           }}
-          className="rounded border border-border cursor-crosshair"
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
-        />
+        >
+          <canvas
+            ref={canvasRef}
+            style={{
+              width: imageWidth * scale,
+              height: imageHeight * scale,
+              boxShadow: "var(--shadow-lg)",
+            }}
+            className="rounded border border-border"
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+            onWheel={handleWheel}
+          />
+        </div>
       </div>
     </div>
   );

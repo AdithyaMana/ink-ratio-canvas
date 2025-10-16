@@ -11,16 +11,27 @@
 import { SelectionBox, LayerResult, AnalysisResult } from "../types";
 
 /**
- * Determines if a pixel contains "ink" based on alpha and brightness threshold
+ * Determines if a pixel contains "ink" based on color distance from background
  */
-function isInkPixel(r: number, g: number, b: number, a: number): boolean {
+function isInkPixel(
+  r: number, 
+  g: number, 
+  b: number, 
+  a: number,
+  bgColor: { r: number; g: number; b: number } = { r: 255, g: 255, b: 255 }
+): boolean {
   // If alpha is very low, it's transparent (no ink)
   if (a < 13) return false; // 0.05 * 255 ≈ 13
   
-  // Check if color differs from white background
-  // Simple brightness threshold: if pixel is dark enough, it's ink
-  const brightness = (r + g + b) / 3;
-  return brightness < 240; // Consider pixels darker than near-white as ink
+  // Calculate color distance from background using Euclidean distance
+  const distance = Math.sqrt(
+    Math.pow(r - bgColor.r, 2) +
+    Math.pow(g - bgColor.g, 2) +
+    Math.pow(b - bgColor.b, 2)
+  );
+  
+  // If distance is significant, it's ink (threshold ~30 works for most cases)
+  return distance > 30;
 }
 
 /**
@@ -49,7 +60,8 @@ function getPixelData(
  */
 export function analyzeImage(
   imageData: ImageData,
-  selections: SelectionBox[]
+  selections: SelectionBox[],
+  backgroundColor?: { r: number; g: number; b: number }
 ): AnalysisResult {
   const { width, height } = imageData;
   const totalImagePixels = width * height;
@@ -62,7 +74,7 @@ export function analyzeImage(
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const [r, g, b, a] = getPixelData(imageData, x, y);
-      if (isInkPixel(r, g, b, a)) {
+      if (isInkPixel(r, g, b, a, backgroundColor)) {
         totalInkPixels++;
       }
     }
@@ -101,7 +113,7 @@ export function analyzeImage(
           inkPixels++;
         } else {
           const [r, g, b, a] = getPixelData(imageData, px, py);
-          if (isInkPixel(r, g, b, a)) {
+          if (isInkPixel(r, g, b, a, backgroundColor)) {
             inkPixels++;
           }
         }

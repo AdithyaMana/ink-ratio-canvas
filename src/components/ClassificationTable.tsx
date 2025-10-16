@@ -1,10 +1,12 @@
+import { useState } from "react";
 import { SelectionBox } from "../types";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { ArrowUp, ArrowDown, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 
 interface ClassificationTableProps {
   selections: SelectionBox[];
@@ -15,6 +17,34 @@ export function ClassificationTable({
   selections,
   onSelectionsChange,
 }: ClassificationTableProps) {
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const toggleSelection = (id: string) => {
+    const newSet = new Set(selectedIds);
+    if (newSet.has(id)) {
+      newSet.delete(id);
+    } else {
+      newSet.add(id);
+    }
+    setSelectedIds(newSet);
+  };
+
+  const selectAll = () => {
+    setSelectedIds(new Set(selections.map(s => s.id)));
+  };
+
+  const deselectAll = () => {
+    setSelectedIds(new Set());
+  };
+
+  const applyBulkEdit = (changes: Partial<SelectionBox>) => {
+    onSelectionsChange(
+      selections.map(sel =>
+        selectedIds.has(sel.id) ? { ...sel, ...changes } : sel
+      )
+    );
+  };
+
   const updateSelection = (id: string, updates: Partial<SelectionBox>) => {
     onSelectionsChange(
       selections.map((sel) => (sel.id === id ? { ...sel, ...updates } : sel))
@@ -44,6 +74,8 @@ export function ClassificationTable({
     onSelectionsChange(newSelections);
   };
 
+  const hasSelection = selectedIds.size > 0;
+
   if (selections.length === 0) {
     return (
       <Card className="p-8 text-center">
@@ -56,10 +88,102 @@ export function ClassificationTable({
 
   return (
     <div className="space-y-3">
+      {/* Bulk Edit Panel */}
+      {hasSelection && (
+        <Card className="border-primary/50 bg-primary/5">
+          <CardContent className="pt-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-sm font-medium">
+                {selectedIds.size} layer{selectedIds.size !== 1 ? "s" : ""} selected
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={deselectAll}
+              >
+                Clear
+              </Button>
+            </div>
+            
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => applyBulkEdit({ isData: true })}
+              >
+                Mark as Data
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => applyBulkEdit({ isData: false })}
+              >
+                Mark as Non-Data
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => applyBulkEdit({ countFullArea: true })}
+              >
+                Enable Full Area
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => applyBulkEdit({ countFullArea: false })}
+              >
+                Disable Full Area
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Selection Controls */}
+      {selections.length > 0 && (
+        <div className="flex items-center justify-between text-sm">
+          <div className="flex gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={selectAll}
+            >
+              Select All
+            </Button>
+            {hasSelection && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={deselectAll}
+              >
+                Deselect All
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
       {selections.map((selection, index) => (
-        <Card key={selection.id} className="p-4">
-          <div className="space-y-4">
-            {/* Header with color and label */}
+        <Card 
+          key={selection.id} 
+          className={`overflow-hidden ${selectedIds.has(selection.id) ? "ring-2 ring-primary" : ""}`}
+        >
+          <CardContent className="p-4">
+            <div className="space-y-4">
+              {/* Selection Checkbox */}
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  checked={selectedIds.has(selection.id)}
+                  onCheckedChange={() => toggleSelection(selection.id)}
+                />
+                <span className="text-sm text-muted-foreground">
+                  Select for bulk edit
+                </span>
+              </div>
+
+              <Separator />
+
+              {/* Header with color and label */}
             <div className="flex items-center gap-3">
               <Input
                 type="color"
@@ -161,6 +285,7 @@ export function ClassificationTable({
               </Label>
             </div>
           </div>
+          </CardContent>
         </Card>
       ))}
     </div>
