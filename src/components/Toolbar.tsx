@@ -1,8 +1,14 @@
-import { Upload, Play, Pipette, Wand2, MousePointer2, Download, FolderOpen, Undo2, Redo2 } from "lucide-react";
+import { Upload, Play, Pipette, Wand2, MousePointer2, Download, FolderOpen, Undo2, Redo2, Trash2, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { ChartProfile, ComponentDefinition } from "@/types";
 import { chartProfiles } from "@/utils/benchmarks";
 
@@ -25,6 +31,7 @@ interface ToolbarProps {
   onProfileChange: (profile: ChartProfile) => void;
   currentComponent: ComponentDefinition | null;
   onComponentSelect: (component: ComponentDefinition | null) => void;
+  onClearSelections: () => void;
 }
 
 export function Toolbar({
@@ -46,6 +53,7 @@ export function Toolbar({
   onProfileChange,
   currentComponent,
   onComponentSelect,
+  onClearSelections,
 }: ToolbarProps) {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -89,7 +97,7 @@ export function Toolbar({
               <SelectTrigger className="w-[200px]">
                 <SelectValue placeholder="Select chart type" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="bg-popover z-50">
                 {chartProfiles.map((profile) => (
                   <SelectItem key={profile.id} value={profile.id}>
                     {profile.name}
@@ -100,76 +108,76 @@ export function Toolbar({
 
             <Separator orientation="vertical" className="h-8" />
 
-            {/* File Operations */}
-            <label>
-              <Input
-                type="file"
-                accept="image/*"
-                onChange={handleFileChange}
-                className="hidden"
-                id="image-upload"
-              />
-              <Button asChild variant="secondary">
-                <span className="cursor-pointer">
-                  <Upload className="w-4 h-4 mr-2" />
-                  Upload
-                </span>
-              </Button>
-            </label>
+            {/* File Menu */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <FileText className="w-4 h-4 mr-2" />
+                  File
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="bg-popover z-50">
+                <DropdownMenuItem asChild>
+                  <label className="cursor-pointer">
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileChange}
+                      className="hidden"
+                      id="image-upload-menu"
+                    />
+                    <span className="flex items-center">
+                      <Upload className="w-4 h-4 mr-2" />
+                      Upload Image
+                    </span>
+                  </label>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild disabled={!hasImage}>
+                  <label className="cursor-pointer">
+                    <Input
+                      type="file"
+                      accept="application/json"
+                      onChange={handleImportChange}
+                      className="hidden"
+                      id="import-selections-menu"
+                    />
+                    <span className="flex items-center">
+                      <FolderOpen className="w-4 h-4 mr-2" />
+                      Import Selections
+                    </span>
+                  </label>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={onExportSelections} disabled={!hasSelections}>
+                  <Download className="w-4 h-4 mr-2" />
+                  Export Selections
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
-            <label>
-              <Input
-                type="file"
-                accept="application/json"
-                onChange={handleImportChange}
-                className="hidden"
-                id="import-selections"
-              />
-              <Button 
-                asChild 
-                variant="outline" 
-                size="sm"
-                disabled={!hasImage}
-              >
-                <span className="cursor-pointer">
-                  <FolderOpen className="w-4 h-4 mr-2" />
-                  Import
-                </span>
-              </Button>
-            </label>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onExportSelections}
-              disabled={!hasSelections}
-            >
-              <Download className="w-4 h-4 mr-2" />
-              Export
-            </Button>
-
-            <Separator orientation="vertical" className="h-8" />
-
-            {/* Undo/Redo */}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onUndo}
-              disabled={!canUndo}
-              title="Undo (Ctrl+Z)"
-            >
-              <Undo2 className="w-4 h-4" />
-            </Button>
-
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onRedo}
-              disabled={!canRedo}
-              title="Redo (Ctrl+Shift+Z)"
-            >
-              <Redo2 className="w-4 h-4" />
-            </Button>
+            {/* Edit Menu */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  Edit
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="bg-popover z-50">
+                <DropdownMenuItem onClick={onUndo} disabled={!canUndo}>
+                  <Undo2 className="w-4 h-4 mr-2" />
+                  Undo
+                  <span className="ml-auto text-xs text-muted-foreground">Ctrl+Z</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={onRedo} disabled={!canRedo}>
+                  <Redo2 className="w-4 h-4 mr-2" />
+                  Redo
+                  <span className="ml-auto text-xs text-muted-foreground">Ctrl+Shift+Z</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={onClearSelections} disabled={!hasSelections}>
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Clear All Selections
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
             <Separator orientation="vertical" className="h-8" />
 
@@ -218,13 +226,14 @@ export function Toolbar({
 
             <Separator orientation="vertical" className="h-8" />
 
-            {/* Analysis */}
+            {/* Primary Action - Run Analysis */}
             <Button
               onClick={onRunAnalysis}
               disabled={!hasImage || !hasSelections || isAnalyzing}
-              className="min-w-[140px]"
+              size="lg"
+              className="min-w-[160px] bg-green-600 hover:bg-green-700 text-white shadow-lg"
             >
-              <Play className="w-4 h-4 mr-2" />
+              <Play className="w-5 h-5 mr-2" />
               {isAnalyzing ? "Analyzing..." : "Run Analysis"}
             </Button>
           </div>

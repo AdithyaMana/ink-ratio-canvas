@@ -14,6 +14,8 @@ interface ImageCanvasProps {
   toolMode: "select" | "eyedropper" | "magicwand";
   onBackgroundColorSample: (color: { r: number; g: number; b: number }) => void;
   currentComponent: ComponentDefinition | null;
+  hoveredLayerId: string | null;
+  onHoverLayer: (id: string | null) => void;
 }
 
 type DragMode = "draw" | "move" | "resize" | null;
@@ -29,6 +31,8 @@ export function ImageCanvas({
   toolMode,
   onBackgroundColorSample,
   currentComponent,
+  hoveredLayerId,
+  onHoverLayer,
 }: ImageCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -93,21 +97,24 @@ export function ImageCanvas({
 
       // Draw selections
       selections.forEach((sel) => {
+        const isHovered = sel.id === hoveredLayerId;
+        const isSelected = sel.id === selectedId;
+        
         ctx.strokeStyle = sel.color;
-        ctx.lineWidth = 3;
+        ctx.lineWidth = isHovered ? 5 : 3;
         ctx.strokeRect(sel.x, sel.y, sel.width, sel.height);
         
-        // Fill with semi-transparent color
-        ctx.fillStyle = sel.color + "20"; // 20 = ~12% opacity
+        // Fill with semi-transparent color (more opaque when hovered)
+        ctx.fillStyle = sel.color + (isHovered ? "40" : "20");
         ctx.fillRect(sel.x, sel.y, sel.width, sel.height);
 
         // Draw label
         ctx.fillStyle = sel.color;
-        ctx.font = "14px sans-serif";
+        ctx.font = isHovered ? "bold 16px sans-serif" : "14px sans-serif";
         ctx.fillText(sel.label, sel.x + 5, sel.y + 20);
 
         // Draw resize handles if selected
-        if (sel.id === selectedId) {
+        if (isSelected) {
           const handleSize = 8;
           ctx.fillStyle = sel.color;
           
@@ -129,7 +136,7 @@ export function ImageCanvas({
       }
     };
     img.src = imageUrl;
-  }, [imageUrl, selections, selectedId, currentBox]);
+  }, [imageUrl, selections, selectedId, currentBox, hoveredLayerId]);
 
   // Convert screen coordinates to image coordinates
   const screenToImage = useCallback((screenX: number, screenY: number) => {
@@ -354,7 +361,9 @@ export function ImageCanvas({
       }
 
       const selection = findSelectionAt(x, y);
-      setHoveredId(selection?.id || null);
+      const hoveredId = selection?.id || null;
+      setHoveredId(hoveredId);
+      onHoverLayer(hoveredId);
       
       if (selection) {
         const handle = findResizeHandle(selection, x, y);
