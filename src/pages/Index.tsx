@@ -11,18 +11,26 @@ import { chartProfiles } from "../utils/benchmarks";
 const STORAGE_KEY = "data-ink-calculator-session";
 
 const Index = () => {
+  const { toast } = useToast();
+  
+  // Image state
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageData, setImageData] = useState<ImageData | null>(null);
   const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
+  
+  // Selection and analysis state
   const [selections, setSelections] = useState<SelectionBox[]>([]);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [ratioType, setRatioType] = useState<RatioType>("density");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  
+  // Tool state
   const [toolMode, setToolMode] = useState<"select" | "eyedropper" | "magicwand">("select");
   const [backgroundColor, setBackgroundColor] = useState({ r: 255, g: 255, b: 255 });
+  
+  // Profile and component state
   const [selectedProfile, setSelectedProfile] = useState<ChartProfile | null>(chartProfiles[0]);
   const [currentComponent, setCurrentComponent] = useState<ComponentDefinition | null>(null);
-  const { toast } = useToast();
 
   // Undo/Redo state
   const [history, setHistory] = useState<SelectionBox[][]>([[]]);
