@@ -7,8 +7,6 @@ import { SelectionBox, AnalysisResult, RatioType, ChartProfile, ComponentDefinit
 import { analyzeImage } from "../utils/analysis";
 import { useToast } from "@/hooks/use-toast";
 import { chartProfiles } from "../utils/benchmarks";
-import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const STORAGE_KEY = "data-ink-calculator-session";
 
@@ -38,9 +36,6 @@ const Index = () => {
   const [history, setHistory] = useState<SelectionBox[][]>([[]]);
   const [historyIndex, setHistoryIndex] = useState(0);
   const isUpdatingFromHistory = useRef(false);
-
-  // Hover state for bi-directional highlighting
-  const [hoveredLayerId, setHoveredLayerId] = useState<string | null>(null);
 
   // Save to localStorage whenever state changes
   useEffect(() => {
@@ -251,23 +246,6 @@ const Index = () => {
     reader.readAsText(file);
   }, [toast]);
 
-  const handleClearSelections = useCallback(() => {
-    setSelections([]);
-    setAnalysisResult(null);
-    toast({
-      title: "Selections cleared",
-      description: "All selections have been removed",
-    });
-  }, [toast]);
-
-  const handleDeleteSelected = useCallback((ids: Set<string>) => {
-    setSelections(prev => prev.filter(sel => !ids.has(sel.id)));
-    toast({
-      title: "Selections deleted",
-      description: `Removed ${ids.size} selection(s)`,
-    });
-  }, [toast]);
-
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Toolbar
@@ -289,13 +267,12 @@ const Index = () => {
         onProfileChange={setSelectedProfile}
         currentComponent={currentComponent}
         onComponentSelect={setCurrentComponent}
-        onClearSelections={handleClearSelections}
       />
 
       <main className="flex-1 container mx-auto px-6 py-6">
-        <ResizablePanelGroup direction="horizontal" className="h-[calc(100vh-140px)] w-full">
-          {/* Canvas Panel */}
-          <ResizablePanel defaultSize={65} minSize={40}>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-140px)]">
+          {/* Canvas - Takes up 2 columns on large screens */}
+          <div className="lg:col-span-2 flex">
             <ImageCanvas
               imageUrl={imageUrl}
               imageWidth={imageDimensions.width}
@@ -306,44 +283,30 @@ const Index = () => {
               toolMode={toolMode}
               onBackgroundColorSample={handleBackgroundColorSample}
               currentComponent={currentComponent}
-              hoveredLayerId={hoveredLayerId}
-              onHoverLayer={setHoveredLayerId}
             />
-          </ResizablePanel>
+          </div>
 
-          <ResizableHandle withHandle />
-
-          {/* Analysis Hub Panel */}
-          <ResizablePanel defaultSize={35} minSize={25}>
-            <div className="h-full flex flex-col">
-              <Tabs defaultValue="layers" className="flex-1 flex flex-col">
-                <TabsList className="mx-4 mt-4">
-                  <TabsTrigger value="layers" className="flex-1">Layers</TabsTrigger>
-                  <TabsTrigger value="results" className="flex-1">Results</TabsTrigger>
-                </TabsList>
-                
-                <TabsContent value="layers" className="flex-1 overflow-y-auto px-4 pb-4">
-                  <ClassificationTable
-                    selections={selections}
-                    onSelectionsChange={setSelections}
-                    hoveredLayerId={hoveredLayerId}
-                    onHoverLayer={setHoveredLayerId}
-                    onDeleteSelected={handleDeleteSelected}
-                  />
-                </TabsContent>
-                
-                <TabsContent value="results" className="flex-1 overflow-y-auto px-4 pb-4">
-                  <ResultsPanel 
-                    result={analysisResult} 
-                    ratioType={ratioType}
-                    onRatioTypeChange={setRatioType}
-                    selectedProfile={selectedProfile}
-                  />
-                </TabsContent>
-              </Tabs>
+          {/* Right Panel - Classifications and Results */}
+          <div className="flex flex-col gap-6 overflow-y-auto">
+            <div>
+              <h2 className="text-lg font-semibold mb-3">Classifications</h2>
+              <ClassificationTable
+                selections={selections}
+                onSelectionsChange={setSelections}
+              />
             </div>
-          </ResizablePanel>
-        </ResizablePanelGroup>
+
+            <div>
+              <h2 className="text-lg font-semibold mb-3">Results</h2>
+            <ResultsPanel 
+              result={analysisResult} 
+              ratioType={ratioType}
+              onRatioTypeChange={setRatioType}
+              selectedProfile={selectedProfile}
+            />
+            </div>
+          </div>
+        </div>
       </main>
     </div>
   );
