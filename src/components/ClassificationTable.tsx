@@ -86,6 +86,15 @@ export function ClassificationTable({
     );
   }
 
+  // Group selections by label
+  const groupedSelections = selections.reduce((acc, sel) => {
+    if (!acc[sel.label]) {
+      acc[sel.label] = [];
+    }
+    acc[sel.label].push(sel);
+    return acc;
+  }, {} as Record<string, SelectionBox[]>);
+
   return (
     <div className="space-y-3">
       {/* Bulk Edit Panel */}
@@ -163,7 +172,21 @@ export function ClassificationTable({
         </div>
       )}
 
-      {selections.map((selection, index) => (
+      {/* Grouped Selections */}
+      {Object.entries(groupedSelections).map(([label, groupSelections]) => (
+        <div key={label} className="space-y-2">
+          <div className="flex items-center gap-2 px-2">
+            <div
+              className="w-4 h-4 rounded"
+              style={{ backgroundColor: groupSelections[0].color }}
+            />
+            <h4 className="font-semibold text-sm text-foreground">
+              {label} ({groupSelections.length})
+            </h4>
+          </div>
+          {groupSelections.map((selection) => {
+            const index = selections.findIndex(s => s.id === selection.id);
+            return (
         <Card 
           key={selection.id} 
           className={`overflow-hidden ${selectedIds.has(selection.id) ? "ring-2 ring-primary" : ""}`}
@@ -287,6 +310,9 @@ export function ClassificationTable({
           </div>
           </CardContent>
         </Card>
+      );
+          })}
+        </div>
       ))}
     </div>
   );

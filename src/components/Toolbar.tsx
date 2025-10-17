@@ -2,6 +2,9 @@ import { Upload, Play, Pipette, Wand2, MousePointer2, Download, FolderOpen, Undo
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ChartProfile, ComponentDefinition } from "@/types";
+import { chartProfiles } from "@/utils/benchmarks";
 
 interface ToolbarProps {
   onImageUpload: (file: File) => void;
@@ -18,6 +21,10 @@ interface ToolbarProps {
   canUndo: boolean;
   canRedo: boolean;
   backgroundColor: { r: number; g: number; b: number };
+  selectedProfile: ChartProfile | null;
+  onProfileChange: (profile: ChartProfile) => void;
+  currentComponent: ComponentDefinition | null;
+  onComponentSelect: (component: ComponentDefinition | null) => void;
 }
 
 export function Toolbar({
@@ -35,6 +42,10 @@ export function Toolbar({
   canUndo,
   canRedo,
   backgroundColor,
+  selectedProfile,
+  onProfileChange,
+  currentComponent,
+  onComponentSelect,
 }: ToolbarProps) {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -54,18 +65,41 @@ export function Toolbar({
 
   return (
     <header className="border-b bg-card">
-      <div className="container mx-auto px-6 py-4">
+      <div className="container mx-auto px-6 py-4 space-y-4">
+        {/* Top Row: Title and Main Actions */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">
               Data-Ink Ratio Calculator
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Upload a chart, draw selections, and analyze data-ink ratios
+              Design Analysis Workbench
             </p>
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Chart Profile Selection */}
+            <Select
+              value={selectedProfile?.id}
+              onValueChange={(value) => {
+                const profile = chartProfiles.find(p => p.id === value);
+                if (profile) onProfileChange(profile);
+              }}
+            >
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Select chart type" />
+              </SelectTrigger>
+              <SelectContent>
+                {chartProfiles.map((profile) => (
+                  <SelectItem key={profile.id} value={profile.id}>
+                    {profile.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Separator orientation="vertical" className="h-8" />
+
             {/* File Operations */}
             <label>
               <Input
@@ -195,6 +229,41 @@ export function Toolbar({
             </Button>
           </div>
         </div>
+
+        {/* Bottom Row: Smart Component Palette */}
+        {hasImage && selectedProfile && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-muted-foreground mr-2">
+              Quick Select:
+            </span>
+            {selectedProfile.components.map((component) => (
+              <Button
+                key={component.name}
+                variant={currentComponent?.name === component.name ? "default" : "outline"}
+                size="sm"
+                onClick={() => onComponentSelect(
+                  currentComponent?.name === component.name ? null : component
+                )}
+                className="gap-2"
+              >
+                <div
+                  className="w-3 h-3 rounded"
+                  style={{ backgroundColor: component.color }}
+                />
+                {component.name}
+              </Button>
+            ))}
+            {currentComponent && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onComponentSelect(null)}
+              >
+                Clear Selection
+              </Button>
+            )}
+          </div>
+        )}
       </div>
     </header>
   );

@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, useCallback } from "react";
-import { SelectionBox } from "../types";
+import { SelectionBox, ComponentDefinition } from "../types";
 import { Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { floodFill } from "../utils/floodFill";
@@ -13,6 +13,7 @@ interface ImageCanvasProps {
   onImageReady: (imageData: ImageData) => void;
   toolMode: "select" | "eyedropper" | "magicwand";
   onBackgroundColorSample: (color: { r: number; g: number; b: number }) => void;
+  currentComponent: ComponentDefinition | null;
 }
 
 type DragMode = "draw" | "move" | "resize" | null;
@@ -27,6 +28,7 @@ export function ImageCanvas({
   onImageReady,
   toolMode,
   onBackgroundColorSample,
+  currentComponent,
 }: ImageCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -211,9 +213,9 @@ export function ImageCanvas({
           y: bbox.minY,
           width: bbox.maxX - bbox.minX,
           height: bbox.maxY - bbox.minY,
-          label: `Selection ${selections.length + 1}`,
-          color: "#3b82f6",
-          isData: true,
+          label: currentComponent ? currentComponent.name : `Selection ${selections.length + 1}`,
+          color: currentComponent ? currentComponent.color : "#3b82f6",
+          isData: currentComponent ? currentComponent.isData : true,
           countFullArea: false,
         };
         onSelectionsChange([...selections, newBox]);
@@ -247,9 +249,9 @@ export function ImageCanvas({
         y,
         width: 0,
         height: 0,
-        label: `Selection ${selections.length + 1}`,
-        color: "#3b82f6",
-        isData: true,
+        label: currentComponent ? currentComponent.name : `Selection ${selections.length + 1}`,
+        color: currentComponent ? currentComponent.color : "#3b82f6",
+        isData: currentComponent ? currentComponent.isData : true,
         countFullArea: false,
       };
       

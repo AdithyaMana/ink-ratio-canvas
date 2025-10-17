@@ -1,8 +1,10 @@
-import { AnalysisResult, RatioType } from "../types";
+import { AnalysisResult, RatioType, ChartProfile } from "../types";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Download, Info } from "lucide-react";
+import { Download, Info, Lightbulb, AlertTriangle, AlertCircle } from "lucide-react";
 import { exportToJSON, exportToCSV } from "../utils/analysis";
+import { getVerdictText } from "../utils/benchmarks";
+import { generateSuggestions } from "../utils/assistant";
 import {
   Tooltip,
   TooltipContent,
@@ -14,12 +16,14 @@ interface ResultsPanelProps {
   result: AnalysisResult | null;
   ratioType: RatioType;
   onRatioTypeChange: (type: RatioType) => void;
+  selectedProfile: ChartProfile | null;
 }
 
 export function ResultsPanel({
   result,
   ratioType,
   onRatioTypeChange,
+  selectedProfile,
 }: ResultsPanelProps) {
   const handleExport = (format: "json" | "csv") => {
     if (!result) return;
@@ -49,6 +53,20 @@ export function ResultsPanel({
   const displayedRatio =
     ratioType === "density" ? result.densityRatio : result.efficiencyRatio;
   const percentage = (displayedRatio * 100).toFixed(2);
+
+  // Get verdict and suggestions
+  const verdict = selectedProfile
+    ? getVerdictText(
+        displayedRatio,
+        ratioType === "density"
+          ? selectedProfile.benchmarks.density
+          : selectedProfile.benchmarks.efficiency,
+        ratioType,
+        selectedProfile.name
+      )
+    : null;
+
+  const suggestions = generateSuggestions(result, selectedProfile);
 
   return (
     <div className="space-y-4">
@@ -90,7 +108,7 @@ export function ResultsPanel({
         </div>
       </Card>
 
-      {/* Main Ratio Display */}
+      {/* Main Ratio Display with Verdict */}
       <Card className="p-6 bg-primary/5 border-primary/20">
         <div className="text-center">
           <div className="text-sm font-medium text-muted-foreground mb-2">
@@ -99,15 +117,53 @@ export function ResultsPanel({
           <div className="text-5xl font-bold text-primary mb-2">
             {percentage}%
           </div>
-          <div className="text-xs text-muted-foreground">
+          <div className="text-xs text-muted-foreground mb-3">
             {result.totalDataPixels.toLocaleString()} data pixels /{" "}
             {ratioType === "density"
               ? result.totalImagePixels.toLocaleString()
               : result.totalInkPixels.toLocaleString()}{" "}
             {ratioType === "density" ? "total" : "ink"} pixels
           </div>
+          {verdict && (
+            <div className={`text-sm font-semibold ${verdict.color}`}>
+              {verdict.text}
+            </div>
+          )}
         </div>
       </Card>
+
+      {/* Suggestions */}
+      {suggestions.length > 0 && (
+        <Card className="p-4">
+          <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
+            <Lightbulb className="w-4 h-4" />
+            Improvement Suggestions
+          </h3>
+          <div className="space-y-3">
+            {suggestions.map((suggestion, index) => (
+              <div
+                key={index}
+                className={`flex gap-3 p-3 rounded-lg border ${
+                  suggestion.type === "critical"
+                    ? "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900"
+                    : suggestion.type === "warning"
+                    ? "bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-900"
+                    : "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900"
+                }`}
+              >
+                {suggestion.type === "critical" ? (
+                  <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                ) : suggestion.type === "warning" ? (
+                  <AlertTriangle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
+                ) : (
+                  <Lightbulb className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                )}
+                <p className="text-sm text-foreground">{suggestion.message}</p>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* Layer Results */}
       <Card className="p-4">

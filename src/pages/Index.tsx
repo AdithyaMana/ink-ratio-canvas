@@ -3,9 +3,10 @@ import { Toolbar } from "../components/Toolbar";
 import { ImageCanvas } from "../components/ImageCanvas";
 import { ClassificationTable } from "../components/ClassificationTable";
 import { ResultsPanel } from "../components/ResultsPanel";
-import { SelectionBox, AnalysisResult, RatioType } from "../types";
+import { SelectionBox, AnalysisResult, RatioType, ChartProfile, ComponentDefinition } from "../types";
 import { analyzeImage } from "../utils/analysis";
 import { useToast } from "@/hooks/use-toast";
+import { chartProfiles } from "../utils/benchmarks";
 
 const STORAGE_KEY = "data-ink-calculator-session";
 
@@ -19,6 +20,8 @@ const Index = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [toolMode, setToolMode] = useState<"select" | "eyedropper" | "magicwand">("select");
   const [backgroundColor, setBackgroundColor] = useState({ r: 255, g: 255, b: 255 });
+  const [selectedProfile, setSelectedProfile] = useState<ChartProfile | null>(chartProfiles[0]);
+  const [currentComponent, setCurrentComponent] = useState<ComponentDefinition | null>(null);
   const { toast } = useToast();
 
   // Undo/Redo state
@@ -33,10 +36,11 @@ const Index = () => {
         imageUrl,
         selections,
         backgroundColor,
+        selectedProfileId: selectedProfile?.id,
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
     }
-  }, [imageUrl, selections, backgroundColor]);
+  }, [imageUrl, selections, backgroundColor, selectedProfile]);
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -49,6 +53,10 @@ const Index = () => {
           setSelections(session.selections);
           if (session.backgroundColor) {
             setBackgroundColor(session.backgroundColor);
+          }
+          if (session.selectedProfileId) {
+            const profile = chartProfiles.find(p => p.id === session.selectedProfileId);
+            if (profile) setSelectedProfile(profile);
           }
 
           // Load image dimensions
@@ -247,6 +255,10 @@ const Index = () => {
         canUndo={historyIndex > 0}
         canRedo={historyIndex < history.length - 1}
         backgroundColor={backgroundColor}
+        selectedProfile={selectedProfile}
+        onProfileChange={setSelectedProfile}
+        currentComponent={currentComponent}
+        onComponentSelect={setCurrentComponent}
       />
 
       <main className="flex-1 container mx-auto px-6 py-6">
@@ -262,6 +274,7 @@ const Index = () => {
               onImageReady={handleImageReady}
               toolMode={toolMode}
               onBackgroundColorSample={handleBackgroundColorSample}
+              currentComponent={currentComponent}
             />
           </div>
 
@@ -277,11 +290,12 @@ const Index = () => {
 
             <div>
               <h2 className="text-lg font-semibold mb-3">Results</h2>
-              <ResultsPanel
-                result={analysisResult}
-                ratioType={ratioType}
-                onRatioTypeChange={setRatioType}
-              />
+            <ResultsPanel 
+              result={analysisResult} 
+              ratioType={ratioType}
+              onRatioTypeChange={setRatioType}
+              selectedProfile={selectedProfile}
+            />
             </div>
           </div>
         </div>

@@ -42,3 +42,24 @@ export interface ImageData {
 }
 
 export type RatioType = "density" | "efficiency";
+
+export interface ChartProfile {
+  id: string;
+  name: string;
+  components: ComponentDefinition[];
+  benchmarks: {
+    density: { good: number; excellent: number };
+    efficiency: { good: number; excellent: number };
+  };
+}
+
+export interface ComponentDefinition {
+  name: string;
+  isData: boolean;
+  color: string;
+}
+
+export interface Suggestion {
+  type: "critical" | "warning" | "tip";
+  message: string;
+}
