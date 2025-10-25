@@ -3,7 +3,7 @@ import { Toolbar } from "../components/Toolbar";
 import { ImageCanvas } from "../components/ImageCanvas";
 import { ClassificationTable } from "../components/ClassificationTable";
 import { ResultsPanel } from "../components/ResultsPanel";
-import { SelectionBox, AnalysisResult, RatioType, ChartProfile, ComponentDefinition } from "../types";
+import { SelectionBox, AnalysisResult, ChartProfile, ComponentDefinition } from "../types";
 import { analyzeImage } from "../utils/analysis";
 import { useToast } from "@/hooks/use-toast";
 import { chartProfiles } from "../utils/benchmarks";
@@ -21,7 +21,6 @@ const Index = () => {
   // Selection and analysis state
   const [selections, setSelections] = useState<SelectionBox[]>([]);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
-  const [ratioType, setRatioType] = useState<RatioType>("density");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   
   // Tool state
@@ -300,8 +299,6 @@ const Index = () => {
               <h2 className="text-lg font-semibold mb-3">Results</h2>
             <ResultsPanel 
               result={analysisResult} 
-              ratioType={ratioType}
-              onRatioTypeChange={setRatioType}
               selectedProfile={selectedProfile}
             />
             </div>

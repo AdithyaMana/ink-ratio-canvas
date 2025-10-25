@@ -1,28 +1,18 @@
-import { AnalysisResult, RatioType, ChartProfile } from "../types";
+import { AnalysisResult, ChartProfile } from "../types";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Download, Info, Lightbulb, AlertTriangle, AlertCircle } from "lucide-react";
+import { Download, Lightbulb, AlertTriangle, AlertCircle } from "lucide-react";
 import { exportToJSON, exportToCSV } from "../utils/analysis";
 import { getVerdictText } from "../utils/benchmarks";
 import { generateSuggestions } from "../utils/assistant";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 
 interface ResultsPanelProps {
   result: AnalysisResult | null;
-  ratioType: RatioType;
-  onRatioTypeChange: (type: RatioType) => void;
   selectedProfile: ChartProfile | null;
 }
 
 export function ResultsPanel({
   result,
-  ratioType,
-  onRatioTypeChange,
   selectedProfile,
 }: ResultsPanelProps) {
   const handleExport = (format: "json" | "csv") => {
@@ -50,18 +40,15 @@ export function ResultsPanel({
     );
   }
 
-  const displayedRatio =
-    ratioType === "density" ? result.densityRatio : result.efficiencyRatio;
+  const displayedRatio = result.efficiencyRatio;
   const percentage = (displayedRatio * 100).toFixed(2);
 
   // Get verdict and suggestions
   const verdict = selectedProfile
     ? getVerdictText(
         displayedRatio,
-        ratioType === "density"
-          ? selectedProfile.benchmarks.density
-          : selectedProfile.benchmarks.efficiency,
-        ratioType,
+        selectedProfile.benchmarks.efficiency,
+        "efficiency",
         selectedProfile.name
       )
     : null;
@@ -70,59 +57,18 @@ export function ResultsPanel({
 
   return (
     <div className="space-y-4">
-      {/* Ratio Type Selector */}
-      <Card className="p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold text-foreground">Ratio Type</h3>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger>
-                <Info className="w-4 h-4 text-muted-foreground" />
-              </TooltipTrigger>
-              <TooltipContent className="max-w-xs">
-                <p className="text-sm">
-                  <strong>Density Ratio:</strong> Data pixels / Total image pixels
-                  <br />
-                  <strong>Efficiency Ratio:</strong> Data pixels / Total ink pixels
-                </p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </div>
-
-        <div className="flex gap-2">
-          <Button
-            variant={ratioType === "density" ? "default" : "outline"}
-            onClick={() => onRatioTypeChange("density")}
-            className="flex-1"
-          >
-            Density
-          </Button>
-          <Button
-            variant={ratioType === "efficiency" ? "default" : "outline"}
-            onClick={() => onRatioTypeChange("efficiency")}
-            className="flex-1"
-          >
-            Efficiency
-          </Button>
-        </div>
-      </Card>
-
       {/* Main Ratio Display with Verdict */}
       <Card className="p-6 bg-primary/5 border-primary/20">
         <div className="text-center">
           <div className="text-sm font-medium text-muted-foreground mb-2">
-            {ratioType === "density" ? "Density Ratio" : "Efficiency Ratio"}
+            Data-Ink Efficiency Ratio
           </div>
           <div className="text-5xl font-bold text-primary mb-2">
             {percentage}%
           </div>
           <div className="text-xs text-muted-foreground mb-3">
             {result.totalDataPixels.toLocaleString()} data pixels /{" "}
-            {ratioType === "density"
-              ? result.totalImagePixels.toLocaleString()
-              : result.totalInkPixels.toLocaleString()}{" "}
-            {ratioType === "density" ? "total" : "ink"} pixels
+            {result.totalInkPixels.toLocaleString()} ink pixels
           </div>
           {verdict && (
             <div className={`text-sm font-semibold ${verdict.color}`}>
