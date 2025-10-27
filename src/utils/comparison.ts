@@ -12,12 +12,16 @@ import { ComparisonResult, ReferenceVisualization } from "@/types/comparison";
 function calculateMetrics(
   userResult: AnalysisResult,
   referenceResult: AnalysisResult
-) {
+): ComparisonResult["metrics"] { // Explicit return type
   const userEfficiency = userResult.efficiencyRatio;
   const referenceEfficiency = referenceResult.efficiencyRatio;
-  
+
   const absoluteDifference = userEfficiency - referenceEfficiency;
-  const relativeDifference = (absoluteDifference / referenceEfficiency) * 100;
+  // Calculate the relative difference as a percentage compared to the reference
+  // Handle division by zero case
+  const relativeDifference = referenceEfficiency === 0
+    ? (userEfficiency > 0 ? Infinity : 0) // Assign Infinity if user is better than zero, else 0
+    : (absoluteDifference / referenceEfficiency) * 100;
   const efficiencyGap = Math.abs(absoluteDifference);
 
   return {
@@ -30,136 +34,168 @@ function calculateMetrics(
 }
 
 /**
- * Calculate component-level breakdown
+ * Calculate component-level breakdown differences.
  */
 function calculateBreakdown(
   userResult: AnalysisResult,
   referenceResult: AnalysisResult
-) {
+): ComparisonResult["breakdown"] { // Explicit return type
   const dataInkDiff = userResult.totalDataPixels - referenceResult.totalDataPixels;
-  const redundancyDiff = userResult.totalNonDataPixels - referenceResult.totalNonDataPixels;
-  
-  // Chartjunk is estimated as excess non-data ink
-  const userChartjunk = Math.max(0, userResult.totalNonDataPixels - referenceResult.totalNonDataPixels);
-  const refChartjunk = 0;
-  const chartjunkDiff = userChartjunk - refChartjunk;
+  // Difference in non-data ink (can be negative if user has less)
+  const nonDataInkDiff = userResult.totalNonDataPixels - referenceResult.totalNonDataPixels;
+
+  // Estimate the difference in potentially unnecessary non-data ink (comparative chartjunk).
+  // This is a heuristic based on the *difference* compared to the reference,
+  // focusing only on the excess amount the user might have.
+  const excessNonDataInkDifference = Math.max(0, nonDataInkDiff);
 
   return {
     dataInkDiff,
-    redundancyDiff,
-    chartjunkDiff,
+    nonDataInkDiff, // Renamed from redundancyDiff for clarity
+    excessNonDataInkDifference, // Renamed from chartjunkDiff
   };
 }
 
 /**
- * Generate human-readable interpretation
+ * Generate human-readable interpretation based on comparison metrics, breakdown,
+ * and the user's analysis result for more specific insights.
  */
 function generateInterpretation(
-  metrics: ReturnType<typeof calculateMetrics>,
-  breakdown: ReturnType<typeof calculateBreakdown>,
-  reference: ReferenceVisualization
+  metrics: ComparisonResult["metrics"],
+  breakdown: ComparisonResult["breakdown"],
+  reference: ReferenceVisualization,
+  userResult: AnalysisResult // Add userResult as input
 ): ComparisonResult["interpretation"] {
   const { relativeDifference, userEfficiency, referenceEfficiency } = metrics;
-  
-  // Determine grade
-  let grade: "excellent" | "good" | "fair" | "poor";
-  if (relativeDifference >= -10) {
-    grade = "excellent";
-  } else if (relativeDifference >= -25) {
-    grade = "good";
-  } else if (relativeDifference >= -40) {
-    grade = "fair";
-  } else {
-    grade = "poor";
-  }
 
-  // Generate summary
+  // --- Determine Grade ---
+  let grade: ComparisonResult["interpretation"]["grade"];
+  if (relativeDifference >= -10) grade = "excellent"; // Within 10% or better than reference
+  else if (relativeDifference >= -25) grade = "good";  // Between 10% and 25% worse
+  else if (relativeDifference >= -40) grade = "fair";   // Between 25% and 40% worse
+  else grade = "poor";                                // More than 40% worse
+
+  // --- Generate Summary Text ---
   let summary: string;
-  if (relativeDifference > 0) {
-    summary = `Your visualization exceeds the ${reference.type} reference by ${Math.abs(relativeDifference).toFixed(1)}%. Excellent work!`;
-  } else if (Math.abs(relativeDifference) < 10) {
-    summary = `Your visualization is very close to the ${reference.type} reference (within ${Math.abs(relativeDifference).toFixed(1)}%).`;
+  const absRelativeDiff = Math.abs(relativeDifference);
+  const diffDesc = isFinite(absRelativeDiff) ? `${absRelativeDiff.toFixed(1)}%` : 'infinitely';
+
+  if (relativeDifference > 5) {
+      summary = `Significantly exceeds the '${reference.name}' (${reference.type}) reference efficiency by ${diffDesc}. Excellent work!`;
+  } else if (relativeDifference >= -5) {
+      summary = `Efficiency is very close to the '${reference.name}' (${reference.type}) reference (within ${diffDesc}). ${relativeDifference >= 0 ? 'Great job!' : ''}`;
   } else {
-    summary = `Your visualization is ${Math.abs(relativeDifference).toFixed(1)}% less efficient than the ${reference.type} reference.`;
+      summary = `Efficiency is ${diffDesc} lower than the '${reference.name}' (${reference.type}) reference.`;
   }
 
-  // Generate insights
+  // --- Generate Insights (using user layers) ---
   const insights: string[] = [];
-  
+  const nonDataLayers = userResult.layers
+    .filter(l => !l.isData && l.inkPixels > 0) // Filter out zero-ink layers
+    .sort((a, b) => b.inkPixels - a.inkPixels); // Sort descending by ink amount
+
+  // Data Ink Insights
   if (breakdown.dataInkDiff < -5000) {
-    insights.push(`You're showing ${Math.abs(breakdown.dataInkDiff).toLocaleString()} fewer data pixels than the reference. Consider if all data is visible.`);
+    insights.push(`Contains ~${Math.abs(breakdown.dataInkDiff).toLocaleString()} fewer data pixels than reference. Ensure essential data ink is present and clearly visible.`);
   } else if (breakdown.dataInkDiff > 5000) {
-    insights.push(`You have ${breakdown.dataInkDiff.toLocaleString()} more data pixels than typical. This may indicate redundant data representation.`);
+    insights.push(`Contains ~${breakdown.dataInkDiff.toLocaleString()} more data pixels than reference. Check for potential data ink redundancy (e.g., labels duplicating bar heights).`);
   }
 
-  if (breakdown.redundancyDiff > 10000) {
-    insights.push(`Your chart has ${breakdown.redundancyDiff.toLocaleString()} more non-data pixels, suggesting potential for simplification.`);
+  // Non-Data Ink Insights
+  if (breakdown.nonDataInkDiff > 10000) {
+    insights.push(`Has significantly more non-data ink (~${breakdown.nonDataInkDiff.toLocaleString()} px) than the reference, indicating high clutter or decoration.`);
+    if (nonDataLayers.length > 0) {
+        const topContributor = nonDataLayers[0];
+        let contributorText = `The largest non-data contributor is '${topContributor.label}' (${topContributor.inkPixels.toLocaleString()} px).`;
+        if (nonDataLayers.length > 1 && nonDataLayers[1].inkPixels > 0) { // Check if second contributor exists and has ink
+            contributorText += ` Followed by '${nonDataLayers[1].label}' (${nonDataLayers[1].inkPixels.toLocaleString()} px).`;
+        }
+        insights.push(contributorText);
+    }
+  } else if (breakdown.nonDataInkDiff > 3000) {
+     insights.push(`Includes noticeably more non-data ink (~${breakdown.nonDataInkDiff.toLocaleString()} px). Review non-essential elements.`);
+     if (nonDataLayers.length > 0) {
+        insights.push(`The '${nonDataLayers[0].label}' layer (${nonDataLayers[0].inkPixels.toLocaleString()} px) contributes most to non-data ink.`);
+     }
+  } else if (breakdown.nonDataInkDiff < -3000) {
+      insights.push(`Contains significantly less non-data ink (~${Math.abs(breakdown.nonDataInkDiff).toLocaleString()} px) than the reference, suggesting a potentially very minimalist design.`);
   }
 
-  if (breakdown.chartjunkDiff > 15000) {
-    insights.push(`Significant chartjunk detected: ${breakdown.chartjunkDiff.toLocaleString()} excess decorative pixels.`);
+  // Excess / Chartjunk Insight
+  if (breakdown.excessNonDataInkDifference > 15000) {
+    insights.push(`High amount of excess non-data ink (~${breakdown.excessNonDataInkDifference.toLocaleString()} px) suggests significant chartjunk or unnecessary decoration compared to the reference.`);
+  } else if (breakdown.excessNonDataInkDifference > 5000) {
+     insights.push(`Contains a notable amount of potentially excess non-data ink (~${breakdown.excessNonDataInkDifference.toLocaleString()} px). Review decorative elements.`);
   }
 
-  if (userEfficiency < referenceEfficiency * 0.7) {
-    insights.push(`Efficiency is notably below reference standards. Major redesign may be beneficial.`);
+  // Overall Efficiency Insight
+  const userEffPercent = (userEfficiency * 100).toFixed(1);
+  const refEffPercent = (referenceEfficiency * 100).toFixed(1);
+  if (grade === 'poor') {
+     insights.push(`Overall efficiency (${userEffPercent}%) is low compared to the reference (${refEffPercent}%). A redesign focusing on maximizing data-ink ratio may be beneficial.`);
+  } else if (userEfficiency < referenceEfficiency * 0.7 && grade === 'fair') { // Check for 'fair' grade specifically
+    insights.push(`Efficiency (${userEffPercent}%) is considerably below the reference standard (${refEffPercent}%). Review fundamental design choices affecting ink usage.`);
   }
 
-  // Generate recommendations
+  // --- Generate Recommendations ---
   const recommendations: string[] = [];
-  
-  if (reference.type === "ideal") {
-    if (relativeDifference < -20) {
-      recommendations.push("Remove non-essential gridlines and reduce axis decorations");
-      recommendations.push("Simplify or remove the legend if categories are self-explanatory");
-      recommendations.push("Eliminate background fills and reduce border weights");
-    } else if (relativeDifference < -10) {
-      recommendations.push("Consider lighter gridlines or removing them entirely");
-      recommendations.push("Reduce non-data ink in axis labels and titles");
-    }
-  } else if (reference.type === "common") {
-    if (relativeDifference < -15) {
-      recommendations.push("Your design is below typical industry standards");
-      recommendations.push("Review for excessive decorative elements or redundant labels");
-      recommendations.push("Consider adopting common conventions for clarity");
-    }
-  } else if (reference.type === "best-practice") {
-    if (relativeDifference < -20) {
-      recommendations.push("Apply Tufte principles: maximize data-ink ratio");
-      recommendations.push("Remove chart borders, background fills, and heavy gridlines");
-      recommendations.push("Use direct labeling instead of legends where possible");
-      recommendations.push("Lighten axis lines and reduce tick marks");
-    } else if (relativeDifference < -10) {
-      recommendations.push("Fine-tune by reducing axis decoration weight");
-      recommendations.push("Consider removing or lightening gridlines further");
-    } else {
-      recommendations.push("Your design is approaching best practices!");
-      recommendations.push("Minor refinements can push you closer to the ideal");
-    }
+
+  // General recommendations based on high non-data ink
+   if (breakdown.nonDataInkDiff > 5000 || breakdown.excessNonDataInkDifference > 3000) {
+      recommendations.push("Identify and remove redundant or purely decorative non-data elements (e.g., excessive/dark gridlines, heavy borders, complex backgrounds, 3D effects).");
+       if (nonDataLayers.length > 0) {
+           recommendations.push(`Target the '${nonDataLayers[0].label}' layer first for ink reduction.`);
+           // Add specific advice based on common non-data labels
+           const topLabelLower = nonDataLayers[0].label.toLowerCase();
+           if (topLabelLower.includes("grid")) recommendations.push("Try using lighter gridlines, fewer lines, dashed lines, or removing them if possible.");
+           if (topLabelLower.includes("background")) recommendations.push("Consider using a transparent or plain white/light background.");
+           if (topLabelLower.includes("border") || topLabelLower.includes("frame")) recommendations.push("Remove or lighten chart borders/frames.");
+           if (topLabelLower.includes("legend")) recommendations.push("Explore direct labeling of data series instead of using a separate legend.");
+       }
+      recommendations.push("Simplify axis labels, titles, and annotations. Ensure they add necessary context without excessive ink.");
+   }
+
+  // Specific recommendations based on comparison type and gap
+  if (reference.type === "ideal" && grade !== 'excellent') {
+      recommendations.push("Strive for maximal minimalism: ensure almost all ink directly represents data values.");
+  } else if (reference.type === "common" && grade === 'poor') {
+      recommendations.push("Your design appears less efficient than typical examples. Review standard chart conventions for this type.");
+  } else if (reference.type === "best-practice" && (grade === 'fair' || grade === 'poor')) {
+       recommendations.push("Apply Tufte's principles rigorously: erase non-data ink, erase redundant data ink.");
+       recommendations.push("Use subtle visual cues (light gray, thin lines) for necessary structural elements like axes or minimal gridlines.");
   }
 
+  // Add encouraging/summary message
   if (recommendations.length === 0) {
-    recommendations.push("Your visualization is well-optimized for this comparison.");
-    recommendations.push("Maintain focus on data clarity and avoid adding decorative elements.");
+      if (grade === 'excellent') recommendations.push(`Excellent efficiency compared to the ${reference.type} reference! Maintain focus on clarity.`);
+      else recommendations.push(`Good efficiency relative to the ${reference.type} reference. Minor tweaks might further optimize.`);
+  } else if (grade === 'excellent' && recommendations.length > 0) {
+      // If grade is excellent but there were still suggestions (e.g., minor non-data ink)
+      recommendations.push("While efficiency is excellent, consider these minor refinements for potentially even greater clarity.");
   }
+
 
   return {
     summary,
     grade,
-    insights: insights.length > 0 ? insights : ["Your visualization is well-balanced for this comparison."],
+    insights: insights.length > 0 ? insights : ["Ink distribution appears relatively balanced compared to this reference."],
     recommendations,
   };
 }
 
 /**
- * Compare user analysis result against a reference
+ * Compare user analysis result against a specific reference visualization.
  */
 export function compareToReference(
   userResult: AnalysisResult,
   reference: ReferenceVisualization
 ): ComparisonResult {
+  if (!userResult || !reference?.analysisResult) {
+      throw new Error("Cannot perform comparison with invalid input results.");
+  }
   const metrics = calculateMetrics(userResult, reference.analysisResult);
   const breakdown = calculateBreakdown(userResult, reference.analysisResult);
-  const interpretation = generateInterpretation(metrics, breakdown, reference);
+  const interpretation = generateInterpretation(metrics, breakdown, reference, userResult); // Pass userResult
 
   return {
     userResult,
@@ -172,7 +208,7 @@ export function compareToReference(
 }
 
 /**
- * Create a custom reference from an uploaded image analysis
+ * Create a custom reference visualization object from an existing analysis result.
  */
 export function createCustomReference(
   name: string,
@@ -181,8 +217,13 @@ export function createCustomReference(
   analysisResult: AnalysisResult,
   imageUrl?: string
 ): ReferenceVisualization {
+   // Basic estimation for metadata
+   const estimatedEssentialNonData = analysisResult.totalDataPixels * 0.25; // Assume essential non-data is ~25% of data ink
+   const redundancyPixels = Math.max(0, analysisResult.totalNonDataPixels - estimatedEssentialNonData);
+   const chartjunkPixels = 0; // Hard to estimate chartjunk automatically
+
   return {
-    id: `custom-${Date.now()}`,
+    id: `custom-${Date.now()}-${Math.random().toString(16).slice(2)}`, // More unique ID
     name,
     description,
     chartType,
@@ -193,8 +234,8 @@ export function createCustomReference(
     metadata: {
       dataInkPixels: analysisResult.totalDataPixels,
       totalInkPixels: analysisResult.totalInkPixels,
-      redundancyPixels: analysisResult.totalNonDataPixels,
-      chartjunkPixels: Math.max(0, analysisResult.totalNonDataPixels - analysisResult.totalDataPixels * 0.3),
+      redundancyPixels: Math.round(redundancyPixels),
+      chartjunkPixels: chartjunkPixels,
     },
   };
 }
